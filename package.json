@@ -1,5 +1,5 @@
 {
-  "name": "linter_test",
+  "name": "batch-linter",
   "version": "1.0.0",
   "description": "Testing amp-toolbox linter package in loop",
   "main": "main.js",
