@@ -1,0 +1,23 @@
+{
+  "name": "linter_test",
+  "version": "1.0.0",
+  "description": "Testing amp-toolbox linter package in loop",
+  "main": "main.js",
+  "scripts": {
+    "build": "tsc --resolveJsonModule --module commonjs --target es2018 --esModuleInterop --strictNullChecks --declaration --outDir dist *.ts",
+    "transpile": "tsc --resolveJsonModule --module commonjs --target es2018 --esModuleInterop --noImplicitAny --strictNullChecks src/*.ts tests/*.ts",
+    "start": "ts-node main.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^3.9.6"
+  },
+  "dependencies": {
+    "@ampproject/toolbox-linter": "file:../amp-toolbox/packages/linter",
+    "chalk": "^4.1.0",
+    "node-fetch": "^2.6.0",
+    "ts-node": "^9.0.0"
+  }
+}
