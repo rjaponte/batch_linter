@@ -7,33 +7,23 @@ import { google } from 'googleapis';
 import {LintData} from './models';
 import date from 'date-and-time';
 
+const TOKEN_PATH = './token.json';
+const CRED_PATH = './credentials.json';
+
 const log = console.log;
 const currDate = new Date();
 
 var urls: string[] = [];
-// ["https://www.gqindia.com/web-stories/5-exercises-bigger-biceps/",
-//   "https://www.gqindia.com/web-stories/5-exercises-bigger-biceps/",
-//   "https://www.gqindia.com/web-stories/5-exercises-bigger-biceps/",
-//   "https://www.gqindia.com/web-stories/5-exercises-bigger-biceps/",
-//   "https://www.gqindia.com/web-stories/5-exercises-bigger-biceps/"];
-
-// Sheets API Typescript QuickStart code found here:
-// https://dev.to/patarapolw/google-sheets-api-quickstart-in-typescript-4peh
 var SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
-const TOKEN_PATH = './token.json';
-const CRED_PATH = './credentials.json';
-
 
 async function test() {
   const auth = await authorize(JSON.parse(fs.readFileSync(CRED_PATH, 'utf8')));
   const sheets = google.sheets({ version: 'v4', auth });
   log(chalk.green("API Key Verified") + "\n");
-  // const sheetID = await readlineAsync('Enter the spreadsheet ID: \n> ');
-  // const ranges = await readlineAsync("Enter the range [Ex. MySheet!A1:E5] \n> ");
-  
-  const sheetID: string = "1ud4p0g4XdX-tH67XpYnpUPZUWeOUkUsdJ4Iejg_UVkQ";
-  const ranges = 'Sheet1!A2:E6';
+  const sheetID = await readlineAsync('Enter the spreadsheet ID: \n> ');
+  const ranges = await readlineAsync("Enter the range [Ex. MySheet!A1:E5] \n> ");
 
+  // Read URLs from Sheet
   if (auth) {
     const results = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetID,
@@ -51,6 +41,7 @@ async function test() {
     }
   }
   
+  // Run Linter on all collected urls
   for (const url of urls) {
     try {
       let parseToJson = await easyLint({
@@ -82,7 +73,7 @@ async function test() {
     }
   }
 
-  // TODO: Timestamp results string
+  // Create a new tab and push the results of each row
   if (auth) {
     var res; 
     const newSheetLabel: string = `${ranges.split('!')[0]} Results [${date.format(currDate, 'MM/DD/YYYY HH:MM')}]`;
@@ -120,11 +111,14 @@ async function test() {
         log("\n");
         log(chalk.blueBright(`Run complete. Results have been added to a new tab @ https://docs.google.com/spreadsheets/d/${sheetID}`));
       } catch (err) {
-        log("There was an error while trying to insert results.");
+        log(chalk.red("There was an error while trying to insert results."));
       }
     }
   }
 }
+
+// Sheets API Typescript QuickStart code found here:
+// https://dev.to/patarapolw/google-sheets-api-quickstart-in-typescript-4peh
 
 async function authorize (cred: any) {
   const { client_secret, client_id, redirect_uris } = cred.installed
