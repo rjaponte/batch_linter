@@ -1,51 +1,94 @@
 import {easyLint} from '@ampproject/toolbox-linter/dist/cli';
-import chalk from 'chalk';
-import {LintMode, Status} from '@ampproject/toolbox-linter';
+import chalk, { bold } from 'chalk';
+import {LintMode, Status, Result} from '@ampproject/toolbox-linter';
 import fs from 'fs';
 import readline from 'readline';
 import { google } from 'googleapis';
 import {LintData} from './models';
 import date from 'date-and-time';
+import program, { args } from 'commander';
+import { sheetsDTO, sheetsObj } from './sheetsDataTransferObject';
 
 const TOKEN_PATH = './token.json';
 const CRED_PATH = './credentials.json';
 
 const log = console.log;
 const currDate = new Date();
-
-var urls: string[] = [];
+const keys: string[] = Object.keys(new sheetsObj());
+var sheetData: sheetsDTO[] = [];
+var returnData: string[][] = [];
+returnData.push(keys as string[]);
 var SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
-async function test() {
+
+async function start(argv: string[]) {
+  program
+    .usage('npm run start [sheet-id] [range]')
+    .option('-i, --sheet-id <type>', 'Google Sheets ID found after /d in URL')
+    .option('-r, --range', 'Spreadsheet name and range in A1 notation')
+    .on( '--help', () => {
+      log('To run please include the following args')
+      log('Enter -i followed by the spreadsheet ID found in the URL after /d \n ');
+      log('Enter -r followed by the spreadsheet name and range in A1 notation [e.g. Sheet1\\!A1:E5]')
+    })
+
+    if (argv.length <= 2) {
+      program.help();
+    }
+
+    program.parse(argv);
+  
+    analyze(program.args[0], program.args[1]);
+    
+}
+
+async function analyze(id: string, range: string) {
+  // Connect to OAuth for token
+  log(chalk.yellowBright("Verifying API access..."));
   const auth = await authorize(JSON.parse(fs.readFileSync(CRED_PATH, 'utf8')));
   const sheets = google.sheets({ version: 'v4', auth });
   log(chalk.green("API Key Verified") + "\n");
-  const sheetID = await readlineAsync('Enter the spreadsheet ID: \n> ');
-  const ranges = await readlineAsync("Enter the range [Ex. MySheet!A1:E5] \n> ");
+  log(chalk.yellowBright("Fetching external spreadsheet...\n"));
+  const sheet_id = id;
+  const ranges = range;
+  // const sheetID: string = "1ud4p0g4XdX-tH67XpYnpUPZUWeOUkUsdJ4Iejg_UVkQ";
+  // const ranges = 'Sheet1!A2:E6';
 
   // Read URLs from Sheet
-  if (auth) {
-    const results = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetID,
-      range: ranges
-    });
-
-    if (results) {
-      const rows = results.data.values;
-      
-      if (rows) {
-        rows.map((row) => {
-          urls.push(`${row[4]}`);
-        })
+  try {
+    if (auth) {
+      const results = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheet_id,
+        range: ranges
+      });
+  
+      if (results) {
+        const rows = results.data.values;
+        
+        if (rows) {
+          rows.map((row) => {
+            let rowData = new sheetsObj();
+            rowData.story_id = row[0];
+            rowData.partner_name = row[1];
+            rowData.partner_domain = row[2];
+            rowData.title = row[3];
+            rowData.url = row[4];
+            rowData.timestamp = date.format(currDate, 'MM/DD/YYYY');
+            sheetData.push(rowData);
+          })
+        }
       }
-    }
+    } 
+  } catch (err) {
+    log(chalk.red("There was an error connecting to the spreadsheet"));
   }
   
+  
   // Run Linter on all collected urls
-  for (const url of urls) {
+  for(var row of sheetData) {
     try {
       let parseToJson = await easyLint({
-        url: url,
+        url: row.url,
         userAgent: "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Mobile Safari/537.36\"",
         format: "json",
         headers: {},
@@ -54,38 +97,50 @@ async function test() {
       });
 
       let data: LintData = JSON.parse(parseToJson);
+      log(`URL: ${chalk.blue(row.url)}`);
 
-      // TODO: Check other attributes for status
-      log(`URL: ${chalk.blue(url)}`);
-      for (const meta of data.storymetadatathumbnailsareok) {
-        if (meta.status === Status.PASS) continue;
-        log(`Thumbs Status: ${meta.status}`);
-        log(`Thumbs Message: ${meta.message}`);
+      for (const key of keys) {
+        if (row[key as keyof sheetsObj] !== null && data[key as keyof LintData]) {
+          if (Array.isArray(data[key as keyof LintData])) {
+            for (const metadata of data[key as keyof LintData] as Result[]) {
+              if (metadata.status === Status.PASS) {
+                (row[key as keyof sheetsObj] as string) = "PASS";
+              } else {
+                (row[key as keyof sheetsObj] as string) = (data[key as keyof LintData] as Result).status + " " + (data[key as keyof LintData] as Result).message;
+            }
+            }
+          } else {
+            if ((data[key as keyof LintData] as Result).status === Status.PASS) {
+              (row[key as keyof sheetsObj] as string) = "PASS";
+            } else {
+              (row[key as keyof sheetsObj] as string) = (data[key as keyof LintData] as Result).status + " " + (data[key as keyof LintData] as Result).message;
+            }
+          }
+        }
       }
-      if (data.linkrelcanonicalisok.status !== Status.PASS) {
-        log(`Canonical Status: ${data.linkrelcanonicalisok.status}`);
-        log(`Canonical Message: ${data.linkrelcanonicalisok.message}`);
-      }
-      console.log("_________________________");
+
+      // convert all kv pairs to a string array of values for submission
+      returnData.push(row.toArray());
+      log("_________________________");
     }
     catch (e) {
-      console.log(e);
+      log(e);
     }
   }
-
-  // Create a new tab and push the results of each row
+    
+  // Create a new tab and push the linter output
   if (auth) {
     var res; 
-    const newSheetLabel: string = `${ranges.split('!')[0]} Results [${date.format(currDate, 'MM/DD/YYYY HH:MM')}]`;
-    let payload = {
-      majorDimension: "COLUMNS",
-      "values": [
-        urls
-      ]
+    var headers;
+    var tab_id: number = 0;
+    const newSheetLabel: string = `${ranges.split('!')[0]} Results [${date.format(currDate, 'MM/DD/YYYY h:mm:ss')}]`;
+    const payload = {
+      "values": returnData
     }
+  
     try {
       res = await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: sheetID,
+        spreadsheetId: sheet_id,
         requestBody: {
           requests: [{
             addSheet: {
@@ -95,21 +150,84 @@ async function test() {
             }
           }]
         }
+      });
+
+      //get ID of newly created tab and format headers
+      const sheet_metadata = await sheets.spreadsheets.get({spreadsheetId: sheet_id});
+      if (sheet_metadata.data.sheets) {
+        for(var s of sheet_metadata.data.sheets){
+          if (s.properties && s.properties.title === newSheetLabel) {
+            tab_id = s.properties.sheetId as number;
+            break;
+          }
+        }
+      }
+      
+
+      headers = await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheet_id,
+        requestBody: {
+          requests: [
+            {
+              repeatCell: {
+                range: {
+                  sheetId: tab_id,
+                  startRowIndex: 0,
+                  endRowIndex: 1,
+                  startColumnIndex: 0,
+                  endColumnIndex: returnData[0].length
+                },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: {
+                      "red": 0.0,
+                      "green": 0.0,
+                      "blue": 0.0,
+                    },
+                    horizontalAlignment: "CENTER",
+                    textFormat: {
+                      foregroundColor: {
+                        "red": 1.0,
+                        "green": 1.0,
+                        "blue": 1.0,
+                      },
+                      bold: true,
+                      fontSize: 11
+                    },
+                  }
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+              }
+            },
+            {
+              updateSheetProperties: {
+                properties: {
+                  sheetId: tab_id,
+                  gridProperties: {
+                    "frozenRowCount": 1
+                  }
+                },
+                fields: "gridProperties.frozenRowCount"
+              }
+            }
+          ]
+        }
       })
     } catch (err) {
+      log(err);
       log(chalk.red("There was an error creating a new tab."));
     }
 
     if(res) {
       try { 
-        const addedData = sheets.spreadsheets.values.update({
-          spreadsheetId: sheetID,
-          range: `${newSheetLabel}!A1:A${urls.length}`,
+        const addedData = await sheets.spreadsheets.values.update({
+          spreadsheetId: sheet_id,
+          range: `${newSheetLabel}!A1:Z${returnData.length}`,
           valueInputOption: "RAW",
           requestBody: payload,
         });
         log("\n");
-        log(chalk.blueBright(`Run complete. Results have been added to a new tab @ https://docs.google.com/spreadsheets/d/${sheetID}`));
+        if (addedData) log(chalk.blueBright(`Run complete. Results have been added to a new tab @ https://docs.google.com/spreadsheets/d/${sheet_id}\n`));
       } catch (err) {
         log(chalk.red("There was an error while trying to insert results."));
       }
@@ -139,7 +257,7 @@ async function getNewToken<T = any> (oAuth2Client: any): Promise<T> {
     scope: SCOPES
   })
 
-  console.log('Authorize this app by visiting this url:', authUrl);
+  console.log('Authorize this app by visiting this url:\n', authUrl);
   const code = await readlineAsync('Enter the code from that page here: ');
   const token = await new Promise((resolve, reject) => {
     oAuth2Client.getToken(code, (err: any, token: any) => {
@@ -168,4 +286,4 @@ async function readlineAsync (question: string) : Promise<string> {
   })
 }
 
-test();
+start(process.argv);
