@@ -4,7 +4,7 @@
   "description": "Testing amp-toolbox linter package in loop",
   "main": "main.js",
   "scripts": {
-    "postinstall": "mkdir amp-toolbox; cd amp-toolbox; git init; git remote add -f origin https://github.com/Dbrown910/amp-toolbox.git; git config core.sparseCheckout true; echo \"packages/linter\" >> .git/info/sparse-checkout; git checkout batchRunTimeO; git pull --depth=1 origin batchRunTimeoutFix; cd ./packages/linter; npm i; npm run build; cd ../../..; npm i ./amp-toolbox/packages/linter",
+    "postinstall": "mkdir amp-toolbox; cd amp-toolbox; git init; git remote add -f origin https://github.com/Dbrown910/amp-toolbox.git; git config core.sparseCheckout true; echo \"packages/linter\" >> .git/info/sparse-checkout; git checkout batchRunTimeOut; git pull --depth=1 origin batchRunTimeoutFix; cd ./packages/linter; npm i; npm run build; cd ../../..; npm i ./amp-toolbox/packages/linter",
     "build": "tsc --resolveJsonModule --module commonjs --target es2018 --esModuleInterop --strictNullChecks --declaration --outDir dist *.ts",
     "transpile": "tsc --resolveJsonModule --module commonjs --target es2018 --esModuleInterop --noImplicitAny --strictNullChecks src/*.ts tests/*.ts",
     "start": "ts-node main.ts",
