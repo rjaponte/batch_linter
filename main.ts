@@ -23,21 +23,17 @@ var SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
 async function start(argv: string[]) {
   program
-    .usage('npm run start [sheet-id] [range]')
+    .usage('npm run start -i [sheet-id] -r [range]')
     .option('-i, --sheet-id <type>', 'Google Sheets ID found after /d in URL')
-    .option('-r, --range', 'Spreadsheet name and range in A1 notation')
-    .on( '--help', () => {
-      log('To run please include the following args')
-      log('Enter -i followed by the spreadsheet ID found in the URL after /d \n ');
-      log('Enter -r followed by the spreadsheet name and range in A1 notation [e.g. Sheet1\\!A1:E5]')
-    })
+    .option('-r, --range <type>', 'Spreadsheet name and range in A1 notation')
+    
 
     if (argv.length <= 2) {
       program.help();
     }
 
     program.parse(argv);
-  
+
     analyze(program.args[0], program.args[1]);
     
 }
@@ -51,8 +47,6 @@ async function analyze(id: string, range: string) {
   log(chalk.yellowBright("Fetching external spreadsheet...\n"));
   const sheet_id = id;
   const ranges = range;
-  // const sheetID: string = "1ud4p0g4XdX-tH67XpYnpUPZUWeOUkUsdJ4Iejg_UVkQ";
-  // const ranges = 'Sheet1!A2:E6';
 
   // Read URLs from Sheet
   try {
@@ -87,41 +81,47 @@ async function analyze(id: string, range: string) {
   // Run Linter on all collected urls
   for(var row of sheetData) {
     try {
-      let parseToJson = await easyLint({
-        url: row.url,
-        userAgent: "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Mobile Safari/537.36\"",
-        format: "json",
-        headers: {},
-        force: LintMode.AmpStory,
-        showPassing: false
-      });
+      if (row.url) {
+        let parseToJson = await easyLint({
+          url: row.url,
+          userAgent: "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Mobile Safari/537.36\"",
+          format: "json",
+          headers: {},
+          force: LintMode.AmpStory,
+          showPassing: false
+        });
 
-      let data: LintData = JSON.parse(parseToJson);
-      log(`URL: ${chalk.blue(row.url)}`);
+        let data: LintData = JSON.parse(parseToJson);
+        log(`URL: ${chalk.blue(row.url)}`);
 
-      for (const key of keys) {
-        if (row[key as keyof sheetsObj] !== null && data[key as keyof LintData]) {
-          if (Array.isArray(data[key as keyof LintData])) {
-            for (const metadata of data[key as keyof LintData] as Result[]) {
-              if (metadata.status === Status.PASS) {
+        for (const key of keys) {
+          if (row[key as keyof sheetsObj] !== null && data[key as keyof LintData]) {
+            if (Array.isArray(data[key as keyof LintData])) {
+              for (const metadata of data[key as keyof LintData] as Result[]) {
+                if ((data[key as keyof LintData] as Result).status === undefined) {
+                  (row[key as keyof sheetsObj] as string) = "FAIL";
+                } else if ((data[key as keyof LintData] as Result).status === Status.PASS) {
+                  (row[key as keyof sheetsObj] as string) = "PASS";
+                } else {
+                  (row[key as keyof sheetsObj] as string) = (data[key as keyof LintData] as Result).status + "\n" + (data[key as keyof LintData] as Result).message;
+                }
+              }
+            } else {
+              if ((data[key as keyof LintData] as Result).status === undefined) {
+                (row[key as keyof sheetsObj] as string) = "FAIL";
+              } else if ((data[key as keyof LintData] as Result).status === Status.PASS) {
                 (row[key as keyof sheetsObj] as string) = "PASS";
               } else {
-                (row[key as keyof sheetsObj] as string) = (data[key as keyof LintData] as Result).status + " " + (data[key as keyof LintData] as Result).message;
-            }
-            }
-          } else {
-            if ((data[key as keyof LintData] as Result).status === Status.PASS) {
-              (row[key as keyof sheetsObj] as string) = "PASS";
-            } else {
-              (row[key as keyof sheetsObj] as string) = (data[key as keyof LintData] as Result).status + " " + (data[key as keyof LintData] as Result).message;
+                (row[key as keyof sheetsObj] as string) = (data[key as keyof LintData] as Result).status + "\n" + (data[key as keyof LintData] as Result).message;
+              }
             }
           }
         }
-      }
 
-      // convert all kv pairs to a string array of values for submission
-      returnData.push(row.toArray());
-      log("_________________________");
+        // convert all kv pairs to a string array of values for submission
+        returnData.push(row.toArray());
+        log("_________________________");
+      }
     }
     catch (e) {
       log(e);
@@ -175,7 +175,7 @@ async function analyze(id: string, range: string) {
                   startRowIndex: 0,
                   endRowIndex: 1,
                   startColumnIndex: 0,
-                  endColumnIndex: returnData[0].length
+                  endColumnIndex: returnData[0].length  //# of fields in sheetsObj
                 },
                 cell: {
                   userEnteredFormat: {
@@ -204,27 +204,44 @@ async function analyze(id: string, range: string) {
                 properties: {
                   sheetId: tab_id,
                   gridProperties: {
-                    "frozenRowCount": 1
+                    "frozenRowCount": 1,
+                    "frozenColumnCount": 6,
                   }
                 },
-                fields: "gridProperties.frozenRowCount"
+                fields: "gridProperties.frozenRowCount,gridProperties.frozenColumnCount"
               }
-            }
+            },
           ]
         }
       })
     } catch (err) {
-      log(err);
       log(chalk.red("There was an error creating a new tab."));
     }
 
-    if(res) {
+    if(res && headers) {
       try { 
         const addedData = await sheets.spreadsheets.values.update({
           spreadsheetId: sheet_id,
           range: `${newSheetLabel}!A1:Z${returnData.length}`,
           valueInputOption: "RAW",
           requestBody: payload,
+        });
+        sheets.spreadsheets.batchUpdate({
+          spreadsheetId: sheet_id,
+          requestBody: {
+            requests : [
+              {
+                autoResizeDimensions : {
+                  dimensions : {
+                    sheetId: tab_id,
+                    dimension: "ROWS",
+                    startIndex: 0,
+                    endIndex: 1,
+                  }
+                }
+              }
+            ]
+          }
         });
         log("\n");
         if (addedData) log(chalk.blueBright(`Run complete. Results have been added to a new tab @ https://docs.google.com/spreadsheets/d/${sheet_id}\n`));
