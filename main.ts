@@ -88,7 +88,8 @@ async function analyze(id: string, range: string) {
           format: "json",
           headers: {},
           force: LintMode.AmpStory,
-          showPassing: false
+          showPassing: false,
+          reportMode: false
         });
 
         let data: LintData = JSON.parse(parseToJson);
@@ -256,13 +257,19 @@ async function analyze(id: string, range: string) {
 // https://dev.to/patarapolw/google-sheets-api-quickstart-in-typescript-4peh
 
 async function authorize (cred: any) {
+  
   const { client_secret, client_id, redirect_uris } = cred.installed
   const oAuth2Client = new google.auth.OAuth2(
     client_id, client_secret, redirect_uris[0])
 
-  if (fs.existsSync(TOKEN_PATH)) {
-    oAuth2Client.setCredentials(JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8')))
-    return oAuth2Client
+  
+  try {
+    if (fs.existsSync(TOKEN_PATH)) {
+      oAuth2Client.setCredentials(JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8')))
+      return oAuth2Client
+    }
+  } catch(err) {
+    console.log('Visit this link to enable the API: https://developers.google.com/sheets/api/quickstart/nodejs . Save your credentials.json file in the batch_linter folder');
   }
 
   return getNewToken<typeof oAuth2Client>(oAuth2Client)
