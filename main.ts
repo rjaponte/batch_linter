@@ -8,6 +8,7 @@ import {LintData} from './models';
 import date from 'date-and-time';
 import program, { args } from 'commander';
 import { sheetsDTO, sheetsObj } from './sheetsDataTransferObject';
+import { resolve } from 'path';
 
 
 const TOKEN_PATH = './token.json';
@@ -16,11 +17,11 @@ const CRED_PATH = './credentials.json';
 const log = console.log;
 const currDate = new Date();
 const keys: string[] = Object.keys(new sheetsObj());
-var sheetData: sheetsDTO[] = [];
-var outputData: sheetsDTO[] = [];
-var returnData: string[][] = [];
+let sheetData: sheetsDTO[] = [];
+let outputData: sheetsDTO[] = [];
+let returnData: string[][] = [];
 returnData.push(keys as string[]);
-var SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+let SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
 
 async function start(argv: string[]) {
@@ -48,28 +49,38 @@ async function analyzeToCSV() {
   try {
     const CsvReadableStream = require('csv-reader');
     
-    let inputStream = fs.createReadStream('./mocks/data1.csv', 'utf8');
+    let inputStream = fs.createReadStream('./samples/data1.csv', 'utf8');
     
-    inputStream
-        .pipe(new CsvReadableStream({ skipEmptyLines: true, skipHeader: true }))
-        .on('data', (row: string) => {
-            let rowData = new sheetsObj();
-            rowData.story_id = row[0];
-            rowData.partner_name = row[1];
-            rowData.partner_domain = row[2];
-            rowData.title = row[3];
-            rowData.url = row[4];
-            rowData.timestamp = date.format(currDate, 'MM/DD/YYYY');
-            sheetData.push(rowData);
-        }); 
+    let readFile = new Promise((resolve, reject) => {
+      inputStream.pipe(new CsvReadableStream({ skipEmptyLines: true, skipHeader: true }))
+      .on('data', (row: string) => {
+        let rowData = new sheetsObj();
+        rowData.story_id = row[0];
+        rowData.partner_name = row[1];
+        rowData.partner_domain = row[2];
+        rowData.title = row[3];
+        rowData.url = row[4];
+        rowData.timestamp = date.format(currDate, 'MM/DD/YYYY');
+        sheetData.push(rowData);
+      })
+      .on('end', () =>  {
+        resolve(sheetData);
+      }) 
+      .on('error', (error: any) =>  {
+        log(error);
+        reject;
+      });
+    });
+
+    await readFile;
+        
   } catch (err) {
     log(err);
     log(chalk.red("There was an error while fetching csv data"));
-  }
-  
-  
+  } 
+
   // Run Linter on all collected urls
-  for(var row of sheetData) {
+  for(let row of sheetData) {
     try {
       if (row.url) {
         let parseToJson = await easyLint({
@@ -117,40 +128,49 @@ async function analyzeToCSV() {
       log(e);
     }
   }
-    
+
   // Create a new csv file and push the linter output
   try  {
     const createCsvWriter = require('csv-writer').createObjectCsvWriter;
-    const outputPath: string = `./Results/Batch_Run_[${date.format(currDate, 'MM/DD/YYYY-h:mm:ss')}].csv`;
-    const payload = [
-      
-    ];
+    const outputPath: string = `./results/Batch_Run_${date.format(currDate, 'MM-DD-YYYY-h:mm:ss')}.csv`;
+    let payload: any[] = [];
+    let headers: any[] = [];
+    for (let obj of sheetData) {
+      payload.push(JSON.parse(JSON.stringify(obj)));
+    }
+    for (let key of keys) {
+      headers.push({ id: key, title: key });
+    }
+    
     const csvWriter = createCsvWriter({
       path: outputPath,
-      header: formatOutputHeaders()
-      // {id: 'name', title: 'NAME'},
-      // {id: 'lang', title: 'LANGUAGE'}
+      header: headers,
     });
-    
-    log("\n");
-    log(chalk.blueBright(`Run complete. Results have been added to a new file at ${outputPath}`));
+
+    csvWriter.writeRecords(payload)
+    .then(() => {
+      log(chalk.blueBright(`\nRun complete. Results have been added to a new file at ${outputPath}\n`));
+    });
   } catch (err) {
     log(chalk.red("There was an error while trying to insert results."));
+    log(err);
   }
 }
 
 async function formatOutputHeaders(): Promise<any[]> {
-  var formattedHeaders: any[] = [];
-  for (var key of keys) {
+  let formattedHeaders: any[] = [];
+  for (let key of keys) {
     formattedHeaders.push({ id: key, title: key });
   }
   return formattedHeaders;
 }
 
-async function formatOutputData(data: sheetsDTO[]) {
-  for (var obj in data) {
-
+async function formatOutputData(data: sheetsDTO[]): Promise<any[]> {
+  let formattedData: any[] = [];
+  for (let obj of data) {
+    formattedData.push(JSON.parse(JSON.stringify(obj)));
   }
+  return formattedData;
 }
 
 // ==== Sheets API Implementation
@@ -195,7 +215,7 @@ async function formatOutputData(data: sheetsDTO[]) {
   
   
 //   // Run Linter on all collected urls
-//   for(var row of sheetData) {
+//   for(let row of sheetData) {
 //     try {
 //       if (row.url) {
 //         let parseToJson = await easyLint({
@@ -246,9 +266,9 @@ async function formatOutputData(data: sheetsDTO[]) {
     
 //   // Create a new tab and push the linter output
 //   if (auth) {
-//     var res; 
-//     var headers;
-//     var tab_id: number = 0;
+//     let res; 
+//     let headers;
+//     let tab_id: number = 0;
 //     const newSheetLabel: string = `${ranges.split('!')[0]} Results [${date.format(currDate, 'MM/DD/YYYY h:mm:ss')}]`;
 //     const payload = {
 //       "values": returnData
@@ -271,7 +291,7 @@ async function formatOutputData(data: sheetsDTO[]) {
 //       //get ID of newly created tab and format headers
 //       const sheet_metadata = await sheets.spreadsheets.get({spreadsheetId: sheet_id});
 //       if (sheet_metadata.data.sheets) {
-//         for(var s of sheet_metadata.data.sheets){
+//         for(let s of sheet_metadata.data.sheets){
 //           if (s.properties && s.properties.title === newSheetLabel) {
 //             tab_id = s.properties.sheetId as number;
 //             break;
@@ -369,55 +389,55 @@ async function formatOutputData(data: sheetsDTO[]) {
 // }
 // ==== END ====
 
-// Sheets API Typescript QuickStart code found here:
-// https://dev.to/patarapolw/google-sheets-api-quickstart-in-typescript-4peh
+// // Sheets API Typescript QuickStart code found here:
+// // https://dev.to/patarapolw/google-sheets-api-quickstart-in-typescript-4peh
 
-async function authorize (cred: any) {
-  const { client_secret, client_id, redirect_uris } = cred.installed
-  const oAuth2Client = new google.auth.OAuth2(
-    client_id, client_secret, redirect_uris[0])
+// async function authorize (cred: any) {
+//   const { client_secret, client_id, redirect_uris } = cred.installed
+//   const oAuth2Client = new google.auth.OAuth2(
+//     client_id, client_secret, redirect_uris[0])
 
-  if (fs.existsSync(TOKEN_PATH)) {
-    oAuth2Client.setCredentials(JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8')))
-    return oAuth2Client
-  }
+//   if (fs.existsSync(TOKEN_PATH)) {
+//     oAuth2Client.setCredentials(JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8')))
+//     return oAuth2Client
+//   }
 
-  return getNewToken<typeof oAuth2Client>(oAuth2Client)
-}
+//   return getNewToken<typeof oAuth2Client>(oAuth2Client)
+// }
 
-async function getNewToken<T = any> (oAuth2Client: any): Promise<T> {
-  const authUrl = oAuth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: SCOPES
-  })
+// async function getNewToken<T = any> (oAuth2Client: any): Promise<T> {
+//   const authUrl = oAuth2Client.generateAuthUrl({
+//     access_type: 'offline',
+//     scope: SCOPES
+//   })
 
-  console.log('Authorize this app by visiting this url:\n', authUrl);
-  const code = await readlineAsync('Enter the code from that page here: ');
-  const token = await new Promise((resolve, reject) => {
-    oAuth2Client.getToken(code, (err: any, token: any) => {
-      err ? reject(err) : resolve(token);
-    })
-  })
-  oAuth2Client.setCredentials(token)
-  // Store the token to disk for later program executions
-  fs.writeFileSync(TOKEN_PATH, JSON.stringify(token))
-  console.log('Token stored to', TOKEN_PATH)
+//   console.log('Authorize this app by visiting this url:\n', authUrl);
+//   const code = await readlineAsync('Enter the code from that page here: ');
+//   const token = await new Promise((resolve, reject) => {
+//     oAuth2Client.getToken(code, (err: any, token: any) => {
+//       err ? reject(err) : resolve(token);
+//     })
+//   })
+//   oAuth2Client.setCredentials(token)
+//   // Store the token to disk for later program executions
+//   fs.writeFileSync(TOKEN_PATH, JSON.stringify(token))
+//   console.log('Token stored to', TOKEN_PATH)
 
-  return oAuth2Client
-}
+//   return oAuth2Client
+// }
 
-async function readlineAsync (question: string) : Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  })
+// async function readlineAsync (question: string) : Promise<string> {
+//   const rl = readline.createInterface({
+//     input: process.stdin,
+//     output: process.stdout
+//   })
 
-  return new Promise((resolve) => {
-    rl.question(question, (answer: string) => {
-      rl.close()
-      resolve(answer)
-    })
-  })
-}
+//   return new Promise((resolve) => {
+//     rl.question(question, (answer: string) => {
+//       rl.close()
+//       resolve(answer)
+//     })
+//   })
+// }
 
 start(process.argv);
