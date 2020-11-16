@@ -1,4 +1,4 @@
-# batch_linter
+# Batch Linter
 Setup Steps
 Create a new directory with mkdir [folder-name] and cd into it
 
