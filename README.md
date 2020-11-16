@@ -25,5 +25,5 @@ Visit https://developers.google.com/sheets/api/quickstart/nodejs and enable the 
 Visit this link to create an OAuth token. Enter it on the command line when prompted to authorize the application (Had to proceed with standard gmail account. Even with Sphinx approval, couldn't use with corp account)
 
 TO RUN
-CSV: npm run start -c [fielpath]
-SHEETS API: npm run start -i [sheet-id] -r [cellrange] (N/A)
+- CSV: npm run start -c [fielpath]
+- SHEETS API: npm run start -i [sheet-id] -r [cellrange] (N/A)
