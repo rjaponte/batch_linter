@@ -1,5 +1,5 @@
 # Batch Linter
-Setup Steps
+Setup:
 
 Create a new directory with mkdir [folder-name] and cd into it
 
