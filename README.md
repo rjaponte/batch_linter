@@ -1,5 +1,6 @@
 # Batch Linter
 Setup Steps
+
 Create a new directory with mkdir [folder-name] and cd into it
 
 Run git clone https://github.com/rjaponte/batch_linter.git 
