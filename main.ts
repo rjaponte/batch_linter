@@ -19,29 +19,30 @@ const currDate = new Date();
 const keys: string[] = Object.keys(new sheetsObj());
 let sheetData: sheetsDTO[] = [];
 let outputData: sheetsDTO[] = [];
-let returnData: string[][] = [];
-returnData.push(keys as string[]);
+// let returnData: string[][] = [];
+// returnData.push(keys as string[]);
 let SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
 
 async function start(argv: string[]) {
-  // program
-  //   .usage('npm run start -i [sheet-id] -r [range]')
-  //   .option('-i, --sheet-id <type>', 'Google Sheets ID found after /d in URL')
-  //   .option('-r, --range <type>', 'Spreadsheet name and range in A1 notation')
+  program
+    .usage('npm run start -i [sheet-id] -r [range]')
+    .option('-i, --sheet-id <type>', 'Google Sheets ID found after /d in URL')
+    .option('-r, --range <type>', 'Spreadsheet name and range in A1 notation')
+    .option('-c, --csv-filepath <type>', '/path/to/file.csv reference')
     
 
   // if (argv.length <= 2) {
   //   program.help();
   // }
 
-  // program.parse(argv);
+  program.parse(argv);
 
   // analyze(program.args[0], program.args[1]);
-  analyzeToCSV();
+  analyzeToCSV(program.args[0]);
 }
 
-async function analyzeToCSV() {
+async function analyzeToCSV(fileName: string) {
   // Read in initial CSV
   log(chalk.yellowBright("Fetching CSV rows...\n"));
 
@@ -49,7 +50,7 @@ async function analyzeToCSV() {
   try {
     const CsvReadableStream = require('csv-reader');
     
-    let inputStream = fs.createReadStream('./samples/data1.csv', 'utf8');
+    let inputStream = fs.createReadStream(fileName, 'utf8');
     
     let readFile = new Promise((resolve, reject) => {
       inputStream.pipe(new CsvReadableStream({ skipEmptyLines: true, skipHeader: true }))
@@ -76,7 +77,7 @@ async function analyzeToCSV() {
         
   } catch (err) {
     log(err);
-    log(chalk.red("There was an error while fetching csv data"));
+    log(chalk.red("There was an error while trying to fetch csv data"));
   } 
 
   // Run Linter on all collected urls
