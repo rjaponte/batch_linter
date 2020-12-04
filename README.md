@@ -9,10 +9,6 @@ Run cd batch_linter
 
 Run npm i to install wrapper dependencies
 
-[TEMPORARY] In a text editor open the file node_modules/@ampproject/toolbox-linter/package.json.
-- Add the line  "@types/cheerio": "0.22.21" in the devDependencies block
-- Search for the text probe-image-size in dependencies block and update the version to 6.0.0
-
 In the command prompt run cd node_modules/@ampproject/toolbox-linter 
 
 Run npm i to install linter dependencies
