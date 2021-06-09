@@ -17,7 +17,7 @@ Run cd ../../.. to return to batch linter directory
 
 
 TO RUN TOOL:
-- CSV: npm run start -c [output_filepath]
+- CSV: npm run start -c [input_filepath]
 - SHEETS API: npm run start -i [sheet-id] -r [cellrange] (N/A)
 
 [For Sheets API Only]
